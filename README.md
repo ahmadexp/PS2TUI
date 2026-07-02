@@ -48,6 +48,13 @@ it runs on the PC110's PC DOS 7 / MS-DOS. It was developed and tested on **real 
   (`PC110FNT.BIN`) — done natively (direct memory read + font-ROM bank switching), no external tool.
 - **System test menu** (Easy-Setup style) — memory info + RAM pattern test, video/colour test,
   interactive keyboard test, and a speaker beep test.
+- **Operation charging** (Power menu) — enable/disable charging *while the machine runs*, by
+  invoking the `ULTRACHG.COM` "operation charge" utility. See how it works in
+  [Discovery/ULTRACHG](https://github.com/ahmadexp/Open-Source-PC110/tree/main/Discovery/ULTRACHG)
+  (it drives the PC110 embedded-controller mailbox at `0x15E8/0x15EC` with a `Zn10`/`Zn00` command).
+- **Backup / restore all settings** — save every CMOS-stored setting to `PC110SET.BIN` and write it
+  back later. It images the whole CMOS config region (`0x10–0x7F`, both checksums included), so the
+  backup is self-consistent; restore asks for confirmation and takes effect on the next boot.
 - **Live battery / AC status** (`B`) — read natively from the **APM BIOS**
   (`INT 15h AX=5300`/`530A`). Shows AC line, battery state and charge %.
 - **Live current settings** (`C`) — read natively straight from **CMOS** (`ports 0x70/0x71`):
