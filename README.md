@@ -49,6 +49,11 @@ it runs on the PC110's PC DOS 7 / MS-DOS. It was developed and tested on **real 
   (`PC110FNT.BIN`) — done natively (direct memory read + font-ROM bank switching), no external tool.
 - **System test menu** (Easy-Setup style) — memory info + RAM pattern test, video/colour test,
   interactive keyboard test, and a speaker beep test.
+- **Hardware diagnostics** (Diagnostics menu) — a one-screen live probe of every subsystem:
+  CPU (CPUID vendor / family-model-stepping / FPU), conventional + extended memory, APM + battery,
+  the SCAMP VL82C420, the power MCU, the PCMCIA PCIC (with chip ID), the banked font ROM
+  (signature check), the COM1 UART, and the RTC (battery-valid + POST-error flags) — each reported
+  *present/absent* from a real port read.
 - **Operation charging** (Power menu) — enable/disable charging *while the machine runs*, by
   invoking the `ULTRACHG.COM` "operation charge" utility. See how it works in
   [Discovery/ULTRACHG](https://github.com/ahmadexp/Open-Source-PC110/tree/main/Discovery/ULTRACHG)
