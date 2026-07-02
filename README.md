@@ -35,7 +35,13 @@ it runs on the PC110's PC DOS 7 / MS-DOS. It was developed and tested on **real 
 
 - **Menu for every PS2 setting** — power management, CPU speed, display, SoundBlaster and
   digitizer resources, COM-port routing, keyboard, parallel port, PCMCIA, battery, and the
-  hidden `_@` advanced options — grouped into categories and applied with a confirm step.
+  hidden `_@` advanced options (including the **undocumented `ADDAUdio`** SoundBlaster-address
+  command) — grouped into categories and applied with a confirm step.
+- **ROM / memory dumps** — write byte-perfect images to the boot drive: **system BIOS**
+  (`PC110BIO.BIN`, 64 KB), **video BIOS** (`PC110VID.BIN`, 32 KB) and the **1 MB banked font ROM**
+  (`PC110FNT.BIN`) — done natively (direct memory read + font-ROM bank switching), no external tool.
+- **System test menu** (Easy-Setup style) — memory info + RAM pattern test, video/colour test,
+  interactive keyboard test, and a speaker beep test.
 - **Live battery / AC status** (`B`) — read natively from the **APM BIOS**
   (`INT 15h AX=5300`/`530A`). Shows AC line, battery state and charge %.
 - **Live current settings** (`C`) — read natively straight from **CMOS** (`ports 0x70/0x71`):
@@ -71,6 +77,9 @@ settings live in CMOS — is documented in the
 PS2TUI's menu covers **every enumerated `PS2.EXE` command** (basic and hidden `_@` ones):
 power management, CPU speed, display, audio/digitizer resources, COM-port routing, keyboard,
 parallel port, ATA/PCMCIA, battery, token-ring, COMB mux, IRQ-clear, and the reset/off actions.
+It also includes **`ADDAUdio`** (SoundBlaster I/O address `0220`) — a command that is present in
+`PS2.EXE`'s keyword table but is **undocumented**: it appears in neither the built-in `?` / `_@???`
+help nor the public command references.
 
 Three commands are **not** in the menu because they need free-form input rather than a fixed set
 of choices (a text-entry field is planned):
