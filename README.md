@@ -1,5 +1,7 @@
 # PS2TUI — a text-UI system manager for the IBM PalmTop PC110
 
+*by Ahmad Byagowi*
+
 `PS2TUI` is a full-screen, keyboard-driven front-end for configuring the **IBM PalmTop PC110**
 (type 2431, 1995). It replaces the ~50 cryptic switches of IBM's `PS2.EXE` command-line tool with
 a navigable menu, and it reads the machine's live state (battery, current settings) **natively**
@@ -9,7 +11,7 @@ It is a tiny (~4.6 KB) real-mode DOS `.COM`, hand-written in assembly, with **no
 it runs on the PC110's PC DOS 7 / MS-DOS. It was developed and tested on **real PC110 hardware**.
 
 ```
-  PS2TUI  -  IBM PalmTop PC110 System Manager
+  PS2TUI  -  IBM PalmTop PC110 System Manager  -  by Ahmad Byagowi
 
   == POWER ==
     Battery power-saving mode
