@@ -1,4 +1,5 @@
-# PS2TUI — a text-UI system manager for the IBM PalmTop PC110
+# PS2TUI 
+## A text-UI system manager for the IBM PalmTop PC110
 
 *by Ahmad Byagowi*
 
