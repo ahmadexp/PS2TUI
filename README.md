@@ -47,13 +47,18 @@ it runs on the PC110's PC DOS 7 / MS-DOS. It was developed and tested on **real 
 - **ROM / memory dumps** — write byte-perfect images to the boot drive: **system BIOS**
   (`PC110BIO.BIN`, 64 KB), **video BIOS** (`PC110VID.BIN`, 32 KB) and the **1 MB banked font ROM**
   (`PC110FNT.BIN`) — done natively (direct memory read + font-ROM bank switching), no external tool.
-- **System test menu** (Easy-Setup style) — memory info + RAM pattern test, video/colour test,
-  interactive keyboard test, and a speaker beep test.
-- **Hardware diagnostics** (Diagnostics menu) — a one-screen live probe of every subsystem:
-  CPU (CPUID vendor / family-model-stepping / FPU), conventional + extended memory, APM + battery,
-  the SCAMP VL82C420, the power MCU, the PCMCIA PCIC (with chip ID), the banked font ROM
-  (signature check), the COM1 UART, and the RTC (battery-valid + POST-error flags) — each reported
-  *present/absent* from a real port read.
+- **System test menu** (Easy-Setup style) — RAM pattern test + memory sizes, video/colour test,
+  interactive keyboard test, speaker beep test, a **live real-time-clock** test, a **PIT timer**
+  test, and a **pointing-device** test (INT 33h, vector-guarded).
+- **Hardware diagnostics** (Diagnostics menu):
+  - **Hardware scan** — a one-screen live probe of every subsystem: CPU (CPUID vendor /
+    family-model-stepping / FPU), conventional + extended memory, APM + battery, the SCAMP
+    VL82C420, the power MCU, the PCMCIA PCIC (chip ID), the banked font ROM (signature check),
+    the COM1 UART, and the RTC — each reported *present/absent* from a real port read.
+  - **Storage / disk** — INT 13h drive geometry (cyl/heads/sectors) + a sector-0 read test.
+  - **Power / battery MCU detail** — dumps the power-MCU register file (`0xEC/0xED`, live
+    battery/thermal telemetry).
+  - **PCMCIA socket status** — reads the PCIC and shows each socket's card-present state.
 - **Operation charging** (Power menu) — enable/disable charging *while the machine runs*, by
   invoking the `ULTRACHG.COM` "operation charge" utility. See how it works in
   [Discovery/ULTRACHG](https://github.com/ahmadexp/Open-Source-PC110/tree/main/Discovery/ULTRACHG)
