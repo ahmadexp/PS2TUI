@@ -66,6 +66,19 @@ settings live in CMOS — is documented in the
 > (and could drop a serial console). PS2TUI marks the disruptive actions with a leading `!` and
 > always shows the exact command and a confirm prompt before running it.
 
+## Command coverage
+
+PS2TUI's menu covers **every enumerated `PS2.EXE` command** (basic and hidden `_@` ones):
+power management, CPU speed, display, audio/digitizer resources, COM-port routing, keyboard,
+parallel port, ATA/PCMCIA, battery, token-ring, COMB mux, IRQ-clear, and the reset/off actions.
+
+Three commands are **not** in the menu because they need free-form input rather than a fixed set
+of choices (a text-entry field is planned):
+
+- `ON AT <date/time>` — set a wake-on-time alarm
+- `_@CMOS [OR|AND|XOR] xxH[=yyH]` — direct CMOS read/modify
+- `_@FNkey NN[=YY]` — send an Fn key code
+
 ## Building
 
 Requires [NASM](https://nasm.us). The prebuilt `PS2TUI.COM` in this repo is the
