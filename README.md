@@ -2,6 +2,10 @@
 
 *by Ahmad Byagowi*
 
+![PS2TUI main menu](screenshot.png)
+
+*PS2TUI running (captured in QEMU booting PC DOS 7).*
+
 `PS2TUI` is a full-screen, keyboard-driven front-end for configuring the **IBM PalmTop PC110**
 (type 2431, 1995). It replaces the ~50 cryptic switches of IBM's `PS2.EXE` command-line tool with
 a navigable menu, and it reads the machine's live state (battery, current settings) **natively**
