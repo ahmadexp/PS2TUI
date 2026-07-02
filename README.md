@@ -67,6 +67,24 @@ it runs on the PC110's PC DOS 7 / MS-DOS. It was developed and tested on **real 
   keyboard click, LCD status-panel mode, power-saving mode, vertical-expand.
 - **Firmware revisions** (`R`) — BIOS / APM / VGA / SETUP-DIAG / keyboard-MCU / power-MCU / PS2.
 
+### Diagnostics on a real PC110
+
+```
+Hardware diagnostics  (live probe)
+
+  CPU ............ GenuineIntel  fam 4 mdl 2 stp 11  FPU: no
+  Memory ......... 640 KB  ext 19456 KB
+  APM BIOS ....... present  batt 100%
+  SCAMP VL82C420 . present
+  Power MCU (U6) . present
+  PCMCIA PCIC .... present  id 0x83
+  Font ROM ....... signature OK (55AA/FONT)
+  COM1 UART ...... present
+  RTC / CMOS ..... battery OK, no POST errors
+```
+*(Captured from a real IBM PC110 — the CPU reports as the Intel 486SX, family 4 / model 2 /
+stepping 11, no FPU.)*
+
 ## Keys
 
 | Key | Action |
