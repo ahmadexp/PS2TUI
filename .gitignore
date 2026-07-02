@@ -1,0 +1,5 @@
+*.o
+*.obj
+*.map
+*.lst
+.DS_Store

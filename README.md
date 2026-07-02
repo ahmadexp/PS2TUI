@@ -1,0 +1,92 @@
+# PS2TUI — a text-UI system manager for the IBM PalmTop PC110
+
+`PS2TUI` is a full-screen, keyboard-driven front-end for configuring the **IBM PalmTop PC110**
+(type 2431, 1995). It replaces the ~50 cryptic switches of IBM's `PS2.EXE` command-line tool with
+a navigable menu, and it reads the machine's live state (battery, current settings) **natively**
+via the APM BIOS and CMOS.
+
+It is a tiny (~4.6 KB) real-mode DOS `.COM`, hand-written in assembly, with **no dependencies** —
+it runs on the PC110's PC DOS 7 / MS-DOS. It was developed and tested on **real PC110 hardware**.
+
+```
+  PS2TUI  -  IBM PalmTop PC110 System Manager
+
+  == POWER ==
+    Battery power-saving mode
+    Auto-suspend after idle          +-------------------+
+    Screen off after idle            | Choose value:     |
+    CPU speed                 <------ | Fast              |
+    Suspend when cover closes        | Medium            |
+    Wake on phone ring               | Slow              |
+    Reset basic settings to defaults +-------------------+
+  == DISPLAY ==
+    Display output
+    Stretch display (vertical expand)
+  == DEVICES ==
+    SoundBlaster IRQ / DMA
+    Digitizer (inking) IRQ / address
+    Infrared / Serial / Modem ports
+  == KEYBOARD / ADVANCED / INFO ==
+    ...
+   UP/DN  ENTER change  C current  B power  R revisions  ESC quit
+```
+
+## Features
+
+- **Menu for every PS2 setting** — power management, CPU speed, display, SoundBlaster and
+  digitizer resources, COM-port routing, keyboard, parallel port, PCMCIA, battery, and the
+  hidden `_@` advanced options — grouped into categories and applied with a confirm step.
+- **Live battery / AC status** (`B`) — read natively from the **APM BIOS**
+  (`INT 15h AX=5300`/`530A`). Shows AC line, battery state and charge %.
+- **Live current settings** (`C`) — read natively straight from **CMOS** (`ports 0x70/0x71`):
+  keyboard click, LCD status-panel mode, power-saving mode, vertical-expand.
+- **Firmware revisions** (`R`) — BIOS / APM / VGA / SETUP-DIAG / keyboard-MCU / power-MCU / PS2.
+
+## Keys
+
+| Key | Action |
+|---|---|
+| ↑ / ↓ | Move between settings (category headers are skipped) |
+| Enter | Open the value picker (or run an action), then confirm with **Y** / cancel with **N** |
+| **C** | Current settings, read live from CMOS |
+| **B** | Battery / AC status, read live from APM |
+| **R** | Firmware revision manifest |
+| ESC | Quit to DOS |
+
+## How it works
+
+PS2TUI does the **read** paths itself (APM `INT 15h`, CMOS `0x70/0x71`) — no external tool needed
+to show live state. For **applying** a setting it invokes IBM's own `PS2.EXE` (which must be on the
+machine, e.g. `C:\PS2.EXE`), so the actual, tested hardware/BIOS work is done by IBM's utility.
+The reverse-engineering behind this — the APM vendor calls, the bitfield encodings, and where the
+settings live in CMOS — is documented in the
+[Open-Source-PC110](https://github.com/ahmadexp/Open-Source-PC110) project under `Discovery/PS2`.
+
+> Setting *serial / IR / modem* ports or *suspend / power-off* can change how the machine behaves
+> (and could drop a serial console). PS2TUI marks the disruptive actions with a leading `!` and
+> always shows the exact command and a confirm prompt before running it.
+
+## Building
+
+Requires [NASM](https://nasm.us). The prebuilt `PS2TUI.COM` in this repo is the
+hardware-tested binary.
+
+```sh
+make            # or:  nasm -f bin PS2TUI.ASM -o PS2TUI.COM
+```
+
+There is no linker step — the source assembles directly to a flat DOS `.COM`. The menu is fully
+**data-driven**: edit the `rows` table near the top of `PS2TUI.ASM` to add or change entries.
+
+## Installing / running
+
+Copy `PS2TUI.COM` to the PC110 (any directory) and run it:
+
+```
+PS2TUI
+```
+
+## License
+
+[CC BY-NC 4.0](LICENSE), matching the parent
+[Open-Source-PC110](https://github.com/ahmadexp/Open-Source-PC110) project.
