@@ -5,7 +5,8 @@
 
 ![PS2TUI main menu](screenshot.png)
 
-*The PS2TUI main menu — categorised, framed, keyboard-driven (captured in QEMU).*
+*The PS2TUI main menu — a classic cyan window with a yellow double border, categorised and
+keyboard-driven (captured in QEMU).*
 
 `PS2TUI` is a full-screen, keyboard-driven front-end for configuring the **IBM PalmTop PC110**
 (type 2431, 1995). It replaces the ~50 cryptic switches of IBM's `PS2.EXE` command-line tool with
