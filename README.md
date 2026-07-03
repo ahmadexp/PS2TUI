@@ -5,38 +5,43 @@
 
 ![PS2TUI main menu](screenshot.png)
 
-*PS2TUI running (captured in QEMU booting PC DOS 7).*
+*The PS2TUI main menu — categorised, framed, keyboard-driven (captured in QEMU).*
 
 `PS2TUI` is a full-screen, keyboard-driven front-end for configuring the **IBM PalmTop PC110**
 (type 2431, 1995). It replaces the ~50 cryptic switches of IBM's `PS2.EXE` command-line tool with
-a navigable menu, and it reads the machine's live state (battery, current settings) **natively**
-via the APM BIOS and CMOS.
+a **two-level menu** — pick a category, then a setting — and it reads the machine's live state
+(battery, current settings) **natively** via the APM BIOS and CMOS.
 
-It is a tiny (~4.6 KB) real-mode DOS `.COM`, hand-written in assembly, with **no dependencies** —
+It is a tiny (~5 KB) real-mode DOS `.COM`, hand-written in assembly, with **no dependencies** —
 it runs on the PC110's PC DOS 7 / MS-DOS. It was developed and tested on **real PC110 hardware**.
 
-```
-  PS2TUI  -  IBM PalmTop PC110 System Manager  -  by Ahmad Byagowi
+### Organised into sub-menus
 
-  == POWER ==
-    Battery power-saving mode
-    Auto-suspend after idle          +-------------------+
-    Screen off after idle            | Choose value:     |
-    CPU speed                 <------ | Fast              |
-    Suspend when cover closes        | Medium            |
-    Wake on phone ring               | Slow              |
-    Reset basic settings to defaults +-------------------+
-  == DISPLAY ==
-    Display output
-    Stretch display (vertical expand)
-  == DEVICES ==
-    SoundBlaster IRQ / DMA
-    Digitizer (inking) IRQ / address
-    Infrared / Serial / Modem ports
-  == KEYBOARD / ADVANCED / INFO ==
-    ...
-   UP/DN  ENTER change  C current  B power  R revisions  ESC quit
+The top level is a set of categories with one-line descriptions; **Enter** opens a category, **ESC**
+steps back. A framed panel, a title/breadcrumb bar and a context-sensitive footer give it a clean,
+consistent feel throughout.
+
 ```
+ IBM PalmTop PC110  ·  System Manager                        by Ahmad Byagowi
+ Main menu
+ ╔════════════════════════════════════════════════════════════════════════╗
+ ║  ► Power & Battery      Power saving, CPU speed, charging               ║
+ ║    Display             LCD / CRT output, vertical stretch               ║
+ ║    Devices             Audio, digitizer, IR / serial / modem           ║
+ ║    Keyboard & Pointer  Click, repeat rate, trackpad settings           ║
+ ║    Advanced            LPT, ATA, PCMCIA, battery, token-ring           ║
+ ║    Dumps & ROM         BIOS / video-BIOS / font-ROM images             ║
+ ║    System Test         RAM, video, keyboard, speaker, clock            ║
+ ║    Diagnostics         Live hardware probes & chipset config           ║
+ ║    Backup & Restore    Save / restore all CMOS settings                ║
+ ║    Information         Battery, settings, firmware revisions           ║
+ ╚════════════════════════════════════════════════════════════════════════╝
+ UP/DN Navigate   ENTER Open   B Battery  C Settings  R Revisions   ESC/Q Quit
+```
+
+![A PS2TUI sub-menu](screenshot-sub.png)
+
+*A category sub-menu (Main menu ► Power & Battery), with the value picker.*
 
 ## Features
 
@@ -107,12 +112,14 @@ stepping 11, no FPU.)*
 
 | Key | Action |
 |---|---|
-| ↑ / ↓ | Move between settings (category headers are skipped) |
-| Enter | Open the value picker (or run an action), then confirm with **Y** / cancel with **N** |
-| **C** | Current settings, read live from CMOS |
-| **B** | Battery / AC status, read live from APM |
-| **R** | Firmware revision manifest |
-| ESC | Quit to DOS |
+| ↑ / ↓ | Move the selection (category on the main menu, setting inside a sub-menu) |
+| Enter | On the main menu: **open** the category. In a sub-menu: **open the picker / run** the item |
+| (in picker) ↑/↓ + Enter | Choose a value → confirm with **Y** / cancel with **N** |
+| ESC | **Back** one level (sub-menu → main menu); on the main menu it **quits** |
+| **B** | Battery / AC status, read live from APM (also in *Information*) |
+| **C** | Current settings, read live from CMOS (also in *Information*) |
+| **R** | Firmware revision manifest (also in *Information*) |
+| **Q** | Quit to DOS from anywhere |
 
 ## How it works
 
