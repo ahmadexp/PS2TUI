@@ -64,6 +64,14 @@ it runs on the PC110's PC DOS 7 / MS-DOS. It was developed and tested on **real 
     gate, reads all 128 indices, and re-locks — **atomically**, since it re-locks between bus cycles.
     The `SL` signature at idx 0x7A/0x7B confirms the read. (See
     [Discovery/Chipset §13a](https://github.com/ahmadexp/Open-Source-PC110/tree/main/Discovery/Chipset).)
+  - **Pointing device (identify + settings)** — talks to the trackpad MCU (**U75, NEC µPD17137A**)
+    over its only host interface, the **8042 PS/2 aux channel**: runs a reset/self-test, shows the
+    device ID and the live **resolution** and **sample rate**, and lets you cycle those settings on
+    screen (`R`/`S`) or re-identify (`T`). It brings the aux channel up on entry and **restores the
+    8042 command byte on exit**. (The MCU's firmware is internal mask ROM and is *not* host-dumpable —
+    see [Discovery/Trackpoint](https://github.com/ahmadexp/Open-Source-PC110/tree/main/Discovery/Trackpoint).)
+
+    ![Pointing device screen](screenshot-pointer.png)
 - **Operation charging** (Power menu) — enable/disable charging *while the machine runs*, by
   invoking the `ULTRACHG.COM` "operation charge" utility. See how it works in
   [Discovery/ULTRACHG](https://github.com/ahmadexp/Open-Source-PC110/tree/main/Discovery/ULTRACHG)
