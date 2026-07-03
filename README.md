@@ -59,6 +59,11 @@ it runs on the PC110's PC DOS 7 / MS-DOS. It was developed and tested on **real 
   - **Power / battery MCU detail** — dumps the power-MCU register file (`0xEC/0xED`, live
     battery/thermal telemetry).
   - **PCMCIA socket status** — reads the PCIC and shows each socket's card-present state.
+  - **Chipset config (VL82C420)** — dumps the **SCAMP config space** live. That register bank
+    reads all-`FF` after POST because the BIOS locks it (the `0x22/0x23` gate); PS2TUI re-opens the
+    gate, reads all 128 indices, and re-locks — **atomically**, since it re-locks between bus cycles.
+    The `SL` signature at idx 0x7A/0x7B confirms the read. (See
+    [Discovery/Chipset §13a](https://github.com/ahmadexp/Open-Source-PC110/tree/main/Discovery/Chipset).)
 - **Operation charging** (Power menu) — enable/disable charging *while the machine runs*, by
   invoking the `ULTRACHG.COM` "operation charge" utility. See how it works in
   [Discovery/ULTRACHG](https://github.com/ahmadexp/Open-Source-PC110/tree/main/Discovery/ULTRACHG)
