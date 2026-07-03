@@ -1,7 +1,7 @@
 # PS2TUI 
 ## A text-UI system manager for the IBM PalmTop PC110
 
-*by Ahmad Byagowi*
+*Version 1.0 · by Ahmad Byagowi*
 
 ![PS2TUI main menu](screenshot.png)
 
