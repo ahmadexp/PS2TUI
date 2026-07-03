@@ -281,6 +281,12 @@ Global keys:  B Battery · C Settings · R Revisions · Q Quit · ESC Back/Quit
 
 ### Diagnostics on a real PC110
 
+The full-screen diagnostic / test / dump pages use a classic **IBM PS/2 Reference-Diskette theme**
+— white text on a blue background with cyan key hints — visually distinct from the cyan tool window
+of the menus:
+
+![PS2TUI diagnostics screen](screenshot-diag.png)
+
 ```
 Hardware diagnostics  (live probe)
 
