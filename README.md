@@ -195,7 +195,8 @@ IBM PalmTop PC110 — System Manager
 ├─ Dumps & ROM
 │   ├─ Dump system BIOS  → C:\PC110BIO.BIN   [native · F000, 64 KB]
 │   ├─ Dump video BIOS   → C:\PC110VID.BIN   [native · C000, 32 KB]
-│   └─ Dump font ROM     → C:\PC110FNT.BIN   [native · 1 MB, 128 banks]
+│   ├─ Dump font ROM     → C:\PC110FNT.BIN   [native · 1 MB, 128 banks]
+│   └─ Dump CMOS/RTC RAM → C:\PC110CMO.BIN   [native · CMOS 0x00-0x7F, 128 B]
 │
 ├─ System Test
 │   ├─ Memory info + RAM test          [native · conv/ext size + pattern]
