@@ -1174,7 +1174,14 @@ flash_bios:
         call    gotoxy
         mov     si, msg_flgo
         call    puts_tty
-        call    flash_core                 ; <-- the vpatch-faithful flash
+        pusha                              ; <-- the vpatch-faithful flash (from file)
+        push    ds
+        push    es
+        call    flash_enable
+        call    flash_program              ; staging already loaded from the file
+        pop     es
+        pop     ds
+        popa
         mov     si, msg_fldone
         jmp     .finish
 .loaderr:
@@ -1221,10 +1228,223 @@ flash_bios:
 ;  Preconditions: FL_ESEG has the 64 KB E image, FL_FSEG the 32 KB F image.
 ;  Runs entirely with interrupts disabled and makes NO int / BIOS calls.
 ; ----------------------------------------------------------------------------
-flash_core:
+; ----------------------------------------------------------------------------
+;  DSTN <-> TFT panel conversion (video-BIOS patch, auto-reversible).
+;  DSTN->TFT applies the 18 F65535 flat-panel XR writes (== vpatch), saving the
+;  machine's own pre-patch bytes to C:\PANEL.SAV first; TFT->DSTN restores them.
+;  So the tool never needs baked-in DSTN values -- it captures each machine's
+;  originals, which is also more correct than any hard-coded table.
+;  (offsets are within the video BIOS = the E-bank = FL_ESEG; see Discovery/65535 6c)
+; ----------------------------------------------------------------------------
+NPANEL    equ 18
+panel_tft:                                 ; DSTN -> TFT
+        mov     si, msg_ptftt
+        call    dump_header
+        mov     si, msg_pwarn
+        call    puts_tty
+        call    getkey
+        cmp     al, 'Y'
+        je      .go
+        cmp     al, 'y'
+        je      .go
+        mov     si, msg_flabort
+        jmp     panel_finish
+.go:    call    panel_power
+        jc      panel_finish               ; SI already = error msg
+        mov     dh, 3
+        mov     dl, 0
+        call    gotoxy
+        mov     si, msg_pgo
+        call    puts_tty
         pusha
         push    ds
         push    es
+        call    flash_enable
+        call    flash_copy_current
+        mov     bx, tft_val                ; source values = TFT table
+        mov     bp, 1                      ; capture current (DSTN) into panel_sav
+        call    flash_apply
+        call    flash_program
+        pop     es
+        pop     ds
+        popa
+        call    panel_save                 ; write panel_sav -> C:\PANEL.SAV
+        mov     si, msg_ptftdone
+        jmp     panel_finish
+
+panel_dstn:                                ; TFT -> DSTN (restore saved originals)
+        mov     si, msg_pdstnt
+        call    dump_header
+        mov     si, msg_pwarn
+        call    puts_tty
+        call    getkey
+        cmp     al, 'Y'
+        je      .chk
+        cmp     al, 'y'
+        je      .chk
+        mov     si, msg_flabort
+        jmp     panel_finish
+.chk:   call    panel_load                 ; load C:\PANEL.SAV -> panel_sav
+        jc      .nosave
+        call    panel_power
+        jc      panel_finish
+        mov     dh, 3
+        mov     dl, 0
+        call    gotoxy
+        mov     si, msg_pgo
+        call    puts_tty
+        pusha
+        push    ds
+        push    es
+        call    flash_enable
+        call    flash_copy_current
+        mov     bx, panel_sav              ; source values = saved originals
+        xor     bp, bp                     ; do not overwrite the save
+        call    flash_apply
+        call    flash_program
+        pop     es
+        pop     ds
+        popa
+        mov     si, msg_pdstndone
+        jmp     panel_finish
+.nosave:
+        mov     si, msg_pnosave
+panel_finish:
+        push    si
+        mov     dh, 5
+        mov     dl, 0
+        call    gotoxy
+        pop     si
+        call    puts_tty
+        mov     dh, 7
+        mov     dl, 0
+        call    gotoxy
+        mov     si, msg_donekey
+        call    puts_hint
+        call    getkey
+        ret
+
+; panel_power: A/C + battery>=20% check. CF=1 + SI=errmsg on fail.
+panel_power:
+        mov     ah, 0x53
+        mov     al, 0x0A
+        mov     bx, 0x0001
+        int     0x15
+        cmp     bh, 0x01
+        jne     .noac
+        cmp     cl, 0x13
+        jle     .nobatt
+        clc
+        ret
+.noac:  mov     si, msg_flnoac
+        stc
+        ret
+.nobatt:mov     si, msg_flnobatt
+        stc
+        ret
+
+; panel_save: write NPANEL bytes [panel_sav] -> C:\PANEL.SAV
+panel_save:
+        mov     ah, 0x3C
+        xor     cx, cx
+        mov     dx, fn_panel
+        int     0x21
+        jc      .d
+        mov     bx, ax
+        mov     ah, 0x40
+        mov     cx, NPANEL
+        mov     dx, panel_sav
+        int     0x21
+        mov     ah, 0x3E
+        int     0x21
+.d:     ret
+
+; panel_load: read C:\PANEL.SAV -> panel_sav (NPANEL bytes). CF=1 if missing/short.
+panel_load:
+        mov     ax, 0x3D00
+        mov     dx, fn_panel
+        int     0x21
+        jc      .err
+        mov     bx, ax
+        mov     ah, 0x3F
+        mov     cx, NPANEL
+        mov     dx, panel_sav
+        int     0x21
+        pushf
+        push    ax
+        mov     ah, 0x3E
+        int     0x21
+        pop     ax
+        popf
+        jc      .err
+        cmp     ax, NPANEL
+        jne     .err
+        clc
+        ret
+.err:   stc
+        ret
+
+; flash_apply: BX = value-table offset (CS-relative, NPANEL bytes);
+;   BP != 0  => capture the current byte at each offset into panel_sav first.
+;   ES is set here; offsets come from tft_off[]; runs inside the CLI window.
+flash_apply:
+        push    ax
+        push    si
+        push    di
+        push    es
+        mov     ax, FL_ESEG
+        mov     es, ax
+        xor     si, si                     ; element index 0..NPANEL-1
+.al:    mov     di, si
+        add     di, di
+        mov     di, [cs:tft_off+di]        ; video-BIOS offset (word)
+        mov     al, [es:di]                ; current byte
+        or      bp, bp
+        jz      .ns
+        mov     [cs:panel_sav+si], al      ; save current (the DSTN original)
+.ns:    mov     al, [cs:bx+si]             ; new value from the table at BX
+        mov     [es:di], al
+        inc     si
+        cmp     si, NPANEL
+        jb      .al
+        pop     es
+        pop     di
+        pop     si
+        pop     ax
+        ret
+
+; flash_copy_current: copy live flash E000->FL_ESEG (0xFFFF), F000lo->FL_FSEG (0x7FFF)
+;   (the raw flash is exposed at E000/F000 after flash_enable, exactly like vpatch)
+flash_copy_current:
+        push    ds
+        push    es
+        mov     ax, 0xE000
+        mov     ds, ax
+        xor     si, si
+        mov     ax, FL_ESEG
+        mov     es, ax
+        xor     di, di
+        mov     cx, 0xFFFF
+        rep     movsb
+        mov     ax, 0xF000
+        mov     ds, ax
+        xor     si, si
+        mov     ax, FL_FSEG
+        mov     es, ax
+        xor     di, di
+        mov     cx, 0x7FFF
+        rep     movsb
+        pop     es
+        pop     ds
+        ret
+
+; ----------------------------------------------------------------------------
+;  flash_enable : chipset unlock + EC/ED decode-open + VPP-enable (leaves CLI set).
+;  flash_program: erase the 96 KB main block, program from FL_ESEG/FL_FSEG, STI.
+;  Byte-faithful port of vpatch. Caller brackets with pusha/push ds/es .. pop/popa
+;  and must make NO int calls between flash_enable and flash_program.
+; ----------------------------------------------------------------------------
+flash_enable:
         mov     al, 0x8E                   ; touch CMOS index 0x0E (NMI-disable)
         out     0x70, al
         jmp     $+2
@@ -1332,10 +1552,10 @@ flash_core:
         in      al, 0x61
         and     al, 0x10
         out     0x61, al
+        ret                                ; <-- flash_enable ends (CLI still set)
+
+flash_program:
         ; ---- 28F002 : erase the 96 KB main block (any addr in E window) ----
-        mov     ax, FL_ESEG
-        mov     es, ax                     ; write target address (dummy DI ok)
-        xor     di, di
         mov     ax, 0xE000
         mov     es, ax
         mov     al, 0x20                   ; erase setup
@@ -1387,10 +1607,7 @@ flash_core:
         mov     al, 0xFF                   ; return flash array to read mode
         mov     [es:di], al
         sti
-        pop     es
-        pop     ds
-        popa
-        ret
+        ret                                ; caller restores es/ds/regs
 
 ; ============================================================================
 ;  SYSTEM TEST : memory / video / keyboard / speaker  (Easy-Setup style)
@@ -3550,6 +3767,8 @@ rows:                     ; pure items, grouped by category (no header rows)
   ROW l_dfont,  dump_font,  0, R_CALL
   ROW l_dcmos,  dump_cmos,  0, R_CALL
   ROW l_flash,  flash_bios, 0, R_CALL
+  ROW l_ptft,   panel_tft,  0, R_CALL
+  ROW l_pdstn,  panel_dstn, 0, R_CALL
   ; -- System Test (38..44) --
   ROW l_tmem,   test_mem,   0, R_CALL
   ROW l_tvid,   test_vid,   0, R_CALL
@@ -3583,11 +3802,11 @@ cats:                     ; top-level categories (label, desc, start, count)
   CAT c_dev,    d_dev,    10, 9
   CAT c_kbd,    d_kbd,    19, 5
   CAT c_adv,    d_adv,    24, 11
-  CAT c_dump,   d_dump,   35, 5
-  CAT c_test,   d_test,   40, 7
-  CAT c_diag,   d_diag,   47, 5
-  CAT c_backup, d_backup, 52, 2
-  CAT c_info,   d_info,   54, 6
+  CAT c_dump,   d_dump,   35, 7
+  CAT c_test,   d_test,   42, 7
+  CAT c_diag,   d_diag,   49, 5
+  CAT c_backup, d_backup, 54, 2
+  CAT c_info,   d_info,   56, 6
 cats_end:
 NCATS equ (cats_end-cats)/6
 
@@ -3655,6 +3874,8 @@ l_dvbios db "Dump video BIOS   -> PC110VID.BIN",0
 l_dfont  db "Dump font ROM     -> PC110FNT.BIN",0
 l_dcmos  db "Dump CMOS/RTC RAM -> PC110CMO.BIN",0
 l_flash  db "Flash BIOS  <- PC110ROM.BIN  (!)",0
+l_ptft   db "Display: DSTN -> TFT  (!)",0
+l_pdstn  db "Display: TFT -> DSTN  (restore)",0
 l_tmem   db "Memory info + RAM test",0
 l_tvid   db "Video / colour test",0
 l_tkbd   db "Keyboard test",0
@@ -3740,6 +3961,13 @@ fn_bios   db "C:\PC110BIO.BIN",0
 fn_vbios  db "C:\PC110VID.BIN",0
 fn_font   db "C:\PC110FNT.BIN",0
 fn_rom    db "C:\PC110ROM.BIN",0
+fn_panel  db "C:\PANEL.SAV",0
+; DSTN<->TFT: video-BIOS (E-bank) offsets + the TFT values (== vpatch); see Discovery/65535 6c
+tft_off   dw 0x01CB,0x0A9A,0x0A9C,0x0AA0,0x0AA4,0x0AA6,0x0AB4,0x0AB8,0x0AE6
+          dw 0x0AE8,0x0AEA,0x0AF6,0x0AF7,0x0AFA,0x0AFC,0x0AFE,0x0B00,0x0B04
+tft_val   db 0x1F,0x42,0xC0,0xC5,0xC4,0xC0,0x1C,0x00,0x56
+          db 0x13,0x5F,0x00,0x0C,0x01,0x26,0xDF,0x05,0x00
+panel_sav db 18 dup(0)                     ; captured pre-patch (DSTN) originals
 fn_cmos   db "C:\PC110CMO.BIN",0
 fn_bsq    db "C:\PC110BSQ.BIN",0
 bs_title  db "Start up - boot sequence  (CMOS 0x1D / 0x1E)",0
@@ -3780,6 +4008,17 @@ msg_flrderr db "Aborted: C:\PC110ROM.BIN is not a full 96 KB image.",0
 msg_flgo   db "Flashing... do NOT power off or touch anything.",0
 msg_fldone db "Done. Flash written. Remove media and reboot.",0
 msg_flabort db "Aborted, no action taken.",0
+msg_ptftt  db "Display conversion: DSTN -> TFT",13,10,0
+msg_pdstnt db "Display conversion: TFT -> DSTN (restore)",13,10,0
+msg_pwarn  db "*** REFLASHES THE VIDEO BIOS panel config ***",13,10
+           db "DSTN->TFT saves your current bytes to C:\PANEL.SAV so",13,10
+           db "TFT->DSTN can restore them. A/C + charged battery needed.",13,10
+           db "If interrupted the machine may be UNBOOTABLE.",13,10,13,10
+           db "Press Y to proceed.  Any other key aborts...",0
+msg_pgo    db "Reflashing video BIOS... do NOT power off.",0
+msg_ptftdone db "Done: TFT panel config written (DSTN saved). Reboot.",0
+msg_pdstndone db "Done: DSTN panel config restored. Reboot.",0
+msg_pnosave db "No C:\PANEL.SAV backup found -- run DSTN->TFT first,",13,10,"or restore a known-DSTN BIOS with Flash BIOS.",0
 msg_tmem   db "Memory information and RAM test",0
 tm_base    db "Conventional memory : ",0
 tm_ext     db "Extended memory     : ",0

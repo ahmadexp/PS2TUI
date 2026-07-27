@@ -200,7 +200,9 @@ IBM PalmTop PC110 — System Manager
 │   ├─ Dump video BIOS   → C:\PC110VID.BIN   [native · C000, 32 KB]
 │   ├─ Dump font ROM     → C:\PC110FNT.BIN   [native · 1 MB, 128 banks]
 │   ├─ Dump CMOS/RTC RAM → C:\PC110CMO.BIN   [native · CMOS 0x00-0x7F, 128 B]
-│   └─ Flash BIOS   (!)  ← C:\PC110ROM.BIN   [native · reflash 96 KB main block]
+│   ├─ Flash BIOS   (!)  ← C:\PC110ROM.BIN   [native · reflash 96 KB main block]
+│   ├─ Display: DSTN → TFT (!)               [native · video-BIOS patch, saves C:\PANEL.SAV]
+│   └─ Display: TFT → DSTN (restore)         [native · restores C:\PANEL.SAV]
 │
 ├─ System Test
 │   ├─ Memory info + RAM test          [native · conv/ext size + pattern]
@@ -254,6 +256,14 @@ Global keys:  B Battery · C Settings · R Revisions · Q Quit · ESC Back/Quit
   it to install e.g. the 28 MB memory-map patch or a TFT video-BIOS. **Reflashing can brick the
   machine — read [`Discovery/BIOS-Flash`](https://github.com/ahmadexp/Open-Source-PC110/blob/main/Discovery/BIOS-Flash/readme.md)
   first, and only run it on A/C with a recovery path.**
+- **Display: DSTN ↔ TFT (`!`)** — two items that reflash just the **video-BIOS panel config** to
+  switch the internal display between the stock passive **DSTN** and an active-matrix **TFT** (the
+  18-byte F65535 flat-panel patch; see [`Discovery/65535`](https://github.com/ahmadexp/Open-Source-PC110/blob/main/Discovery/65535/readme.md)
+  §6c). **DSTN → TFT** first saves the machine's current panel bytes to `C:\PANEL.SAV`, then applies
+  the TFT values; **TFT → DSTN** restores that backup — so the round-trip is exact and the tool needs
+  no hard-coded DSTN table. Same A/C + battery gate and brick warning as Flash BIOS; reboot to take
+  effect. (TFT → DSTN needs the `C:\PANEL.SAV` a prior DSTN → TFT created on that machine, or a
+  known-DSTN BIOS restored via Flash BIOS.) **Untested on hardware.**
 - **System test menu** (Easy-Setup style) — RAM pattern test + memory sizes, video/colour test,
   interactive keyboard test, speaker beep test, a **live real-time-clock** test, a **PIT timer**
   test, and a **pointing-device** test (INT 33h, vector-guarded).
