@@ -1102,6 +1102,297 @@ dump_cmos:
         jmp     dump_finish
 
 ; ============================================================================
+;  BIOS UPDATE : reflash the 96 KB main block of U59 (Intel 28F002BXT) from a
+;  file on the boot drive.  Reproduces yyzkevin's vpatch flash recipe exactly:
+;  the same chipset unlock, EC/ED shadow-decode open, VPP-enable and 28F002
+;  block-erase / byte-program / status-poll sequence.  The flash routine runs
+;  from THIS .COM (conventional memory), not from the ROM being erased, and it
+;  holds CLI across the whole erase/program window with NO int calls, so the
+;  running code never faults on the in-flux flash.
+;
+;  Source image  : C:\PC110ROM.BIN = the raw 96 KB main block, flash offset
+;                  0x20000-0x37FFF of a 256 KB dump  (= CPU E0000-F7FFF window).
+;                  First 64 KB -> E bank, next 32 KB -> F-lower.  Prepare it by
+;                  slicing bytes [0x20000:0x38000] out of a patched 256 KB BIOS.
+;  Block covered : the single 96 KB erase block (E000 window + F000 low 32 KB).
+;                  The 8 KB parameter blocks and the 16 KB boot block (top of
+;                  the chip, incl. the reset vector) are NOT touched -> a bad
+;                  main-block write is still recoverable via the boot block.
+;  DANGER        : interrupting this can brick the machine.  A/C + charged
+;                  battery are required and checked, exactly like vpatch.
+; ============================================================================
+FL_ESEG   equ 0x3000               ; RAM staging: E-bank image (64 KB)
+FL_FSEG   equ 0x4000               ; RAM staging: F-lower image (32 KB)
+
+flash_bios:
+        mov     si, msg_fltitle
+        call    dump_header
+        mov     si, msg_flwarn             ; multi-line disclaimer + "press Y"
+        call    puts_tty
+        call    getkey
+        cmp     al, 'Y'
+        je      .power
+        cmp     al, 'y'
+        je      .power
+        mov     si, msg_flabort
+        jmp     .finish
+.power:
+        ; ---- power check : INT 15h AH=53h AL=0Ah BX=1  (BH=AC, CL=batt%) ----
+        mov     ah, 0x53
+        mov     al, 0x0A
+        mov     bx, 0x0001
+        int     0x15
+        cmp     bh, 0x01                   ; AC line online?
+        je      .battchk
+        mov     si, msg_flnoac
+        jmp     .finish
+.battchk:
+        cmp     cl, 0x13                   ; battery > 19% (i.e. >= 20)?
+        jg      .load
+        mov     si, msg_flnobatt
+        jmp     .finish
+.load:
+        ; ---- load C:\PC110ROM.BIN : 64 KB -> FL_ESEG, 32 KB -> FL_FSEG ----
+        mov     ax, 0x3D00                 ; open existing, read-only
+        mov     dx, fn_rom
+        int     0x21
+        jc      .loaderr
+        mov     [fhandle], ax
+        mov     bx, FL_ESEG                ; E bank: two 32 KB reads
+        call    .rd32
+        jc      .rderr
+        mov     bx, FL_ESEG+0x0800
+        call    .rd32
+        jc      .rderr
+        mov     bx, FL_FSEG                ; F-lower: one 32 KB read
+        call    .rd32
+        jc      .rderr
+        call    close_out
+        ; ---- announce, then go dark (no int calls past this point) ----
+        mov     dh, 3
+        mov     dl, 0
+        call    gotoxy
+        mov     si, msg_flgo
+        call    puts_tty
+        call    flash_core                 ; <-- the vpatch-faithful flash
+        mov     si, msg_fldone
+        jmp     .finish
+.loaderr:
+        mov     si, msg_flnofile
+        jmp     .finish
+.rderr:
+        call    close_out
+        mov     si, msg_flrderr
+.finish:
+        push    si
+        mov     dh, 5
+        mov     dl, 0
+        call    gotoxy
+        pop     si
+        call    puts_tty
+        mov     dh, 7
+        mov     dl, 0
+        call    gotoxy
+        mov     si, msg_donekey
+        call    puts_hint
+        call    getkey
+        ret
+.rd32:  ; read 0x8000 bytes from [fhandle] into BX:0000 ; CF set on short/err
+        push    ds
+        mov     ds, bx
+        xor     dx, dx
+        mov     cx, 0x8000
+        mov     bx, [cs:fhandle]
+        mov     ah, 0x3F
+        int     0x21
+        pop     ds
+        jc      .rd32e
+        cmp     ax, 0x8000                 ; must be a full 32 KB
+        jne     .rd32short
+        clc
+        ret
+.rd32short:
+        stc
+.rd32e:
+        ret
+
+; ----------------------------------------------------------------------------
+;  flash_core : the byte-for-byte port of vpatch's flash sequence.
+;  Preconditions: FL_ESEG has the 64 KB E image, FL_FSEG the 32 KB F image.
+;  Runs entirely with interrupts disabled and makes NO int / BIOS calls.
+; ----------------------------------------------------------------------------
+flash_core:
+        pusha
+        push    ds
+        push    es
+        mov     al, 0x8E                   ; touch CMOS index 0x0E (NMI-disable)
+        out     0x70, al
+        jmp     $+2
+        in      al, 0x71
+        cli
+        ; ---- block2 (0x24/0x25) four-read unlock ----
+        mov     dx, 0xFC23
+        in      al, dx
+        mov     dx, 0xF023
+        in      al, dx
+        mov     dx, 0xC023
+        in      al, dx
+        mov     dx, 0x23
+        in      al, dx
+        jmp     $+2
+        ; block2[0xFE] &= ~1  (BIOS write-protect enable)
+        mov     al, 0xFE
+        out     0x24, al
+        jmp     $+2
+        in      al, 0x25
+        and     al, 0xFE
+        mov     ah, al
+        mov     al, 0xFE
+        out     0x24, al
+        jmp     $+2
+        mov     al, ah
+        out     0x25, al
+        jmp     $+2
+        ; block2[0xFA] = 1
+        mov     al, 0xFA
+        out     0x24, al
+        jmp     $+2
+        mov     al, 0x01
+        out     0x25, al
+        jmp     $+2
+        out     0xFB, al                   ; open EC/ED config window
+        ; EC/ED[0x11]=0, [0x12]=0, [0x17]=0x55, [0x18]=0x55
+        mov     al, 0x11
+        out     0xEC, al
+        jmp     $+2
+        in      al, 0xED
+        jmp     $+2
+        mov     al, 0x11
+        out     0xEC, al
+        jmp     $+2
+        xor     al, al
+        out     0xED, al
+        jmp     $+2
+        mov     al, 0x12
+        out     0xEC, al
+        jmp     $+2
+        in      al, 0xED
+        jmp     $+2
+        mov     al, 0x12
+        out     0xEC, al
+        jmp     $+2
+        xor     al, al
+        out     0xED, al
+        jmp     $+2
+        mov     al, 0x17
+        out     0xEC, al
+        jmp     $+2
+        in      al, 0xED
+        jmp     $+2
+        mov     al, 0x17
+        out     0xEC, al
+        jmp     $+2
+        mov     al, 0x55
+        out     0xED, al
+        jmp     $+2
+        mov     al, 0x18
+        out     0xEC, al
+        jmp     $+2
+        in      al, 0xED
+        jmp     $+2
+        mov     al, 0x18
+        out     0xEC, al
+        jmp     $+2
+        mov     al, 0x55
+        out     0xED, al
+        jmp     $+2
+        ; EC/ED[0x0C] &= 0x8F  (open the ROM/shadow region so writes reach flash)
+        mov     al, 0x0C
+        out     0xEC, al
+        jmp     $+2
+        in      al, 0xED
+        and     al, 0x8F
+        mov     ah, al
+        mov     al, 0x0C
+        out     0xEC, al
+        jmp     $+2
+        mov     al, ah
+        out     0xED, al
+        jmp     $+2
+        out     0xF9, al                   ; close EC/ED window
+        ; ---- caches off (CD|NW) + invalidate ----
+        mov     eax, cr0
+        or      eax, 0x60000000
+        mov     cr0, eax
+        invd
+        ; ---- VPP-enable : port 0x98 bit 3 ; refresh-only on port 0x61 ----
+        in      al, 0x98
+        or      al, 0x08
+        out     0x98, al
+        in      al, 0x61
+        and     al, 0x10
+        out     0x61, al
+        ; ---- 28F002 : erase the 96 KB main block (any addr in E window) ----
+        mov     ax, FL_ESEG
+        mov     es, ax                     ; write target address (dummy DI ok)
+        xor     di, di
+        mov     ax, 0xE000
+        mov     es, ax
+        mov     al, 0x20                   ; erase setup
+        mov     [es:di], al
+        mov     al, 0xD0                   ; erase confirm
+        mov     [es:di], al
+        mov     al, 0x70                   ; read status
+        mov     [es:di], al
+.erwait:
+        mov     al, [es:di]
+        and     al, 0x80                   ; WSMS ready?
+        jz      .erwait
+        ; ---- program E bank : 0xFFFF bytes, high->low (from FL_ESEG) ----
+        mov     ax, FL_ESEG
+        mov     ds, ax
+        mov     ax, 0xE000
+        mov     es, ax
+        mov     cx, 0xFFFF
+        mov     di, cx
+.epl:   dec     di
+        mov     al, 0x40                   ; program setup
+        mov     [es:di], al
+        mov     al, [di]                   ; data byte from staging (ds:di)
+        mov     [es:di], al
+        mov     al, 0x70
+        mov     [es:di], al
+.epw:   mov     al, [es:di]
+        and     al, 0x80
+        jz      .epw
+        loop    .epl
+        ; ---- program F-lower : 0x7FFF bytes, high->low (from FL_FSEG) ----
+        mov     ax, FL_FSEG
+        mov     ds, ax
+        mov     ax, 0xF000
+        mov     es, ax
+        mov     cx, 0x7FFF
+        mov     di, cx
+.fpl:   dec     di
+        mov     al, 0x40
+        mov     [es:di], al
+        mov     al, [di]
+        mov     [es:di], al
+        mov     al, 0x70
+        mov     [es:di], al
+.fpw:   mov     al, [es:di]
+        and     al, 0x80
+        jz      .fpw
+        loop    .fpl
+        mov     al, 0xFF                   ; return flash array to read mode
+        mov     [es:di], al
+        sti
+        pop     es
+        pop     ds
+        popa
+        ret
+
+; ============================================================================
 ;  SYSTEM TEST : memory / video / keyboard / speaker  (Easy-Setup style)
 ; ============================================================================
 MEMBUF  equ scratch_area           ; scratch just past the program (see end of file),
@@ -3258,6 +3549,7 @@ rows:                     ; pure items, grouped by category (no header rows)
   ROW l_dvbios, dump_vbios, 0, R_CALL
   ROW l_dfont,  dump_font,  0, R_CALL
   ROW l_dcmos,  dump_cmos,  0, R_CALL
+  ROW l_flash,  flash_bios, 0, R_CALL
   ; -- System Test (38..44) --
   ROW l_tmem,   test_mem,   0, R_CALL
   ROW l_tvid,   test_vid,   0, R_CALL
@@ -3291,11 +3583,11 @@ cats:                     ; top-level categories (label, desc, start, count)
   CAT c_dev,    d_dev,    10, 9
   CAT c_kbd,    d_kbd,    19, 5
   CAT c_adv,    d_adv,    24, 11
-  CAT c_dump,   d_dump,   35, 4
-  CAT c_test,   d_test,   39, 7
-  CAT c_diag,   d_diag,   46, 5
-  CAT c_backup, d_backup, 51, 2
-  CAT c_info,   d_info,   53, 6
+  CAT c_dump,   d_dump,   35, 5
+  CAT c_test,   d_test,   40, 7
+  CAT c_diag,   d_diag,   47, 5
+  CAT c_backup, d_backup, 52, 2
+  CAT c_info,   d_info,   54, 6
 cats_end:
 NCATS equ (cats_end-cats)/6
 
@@ -3362,6 +3654,7 @@ l_dbios  db "Dump system BIOS  -> PC110BIO.BIN",0
 l_dvbios db "Dump video BIOS   -> PC110VID.BIN",0
 l_dfont  db "Dump font ROM     -> PC110FNT.BIN",0
 l_dcmos  db "Dump CMOS/RTC RAM -> PC110CMO.BIN",0
+l_flash  db "Flash BIOS  <- PC110ROM.BIN  (!)",0
 l_tmem   db "Memory info + RAM test",0
 l_tvid   db "Video / colour test",0
 l_tkbd   db "Keyboard test",0
@@ -3446,6 +3739,7 @@ o_aadd   db "0220",0,0
 fn_bios   db "C:\PC110BIO.BIN",0
 fn_vbios  db "C:\PC110VID.BIN",0
 fn_font   db "C:\PC110FNT.BIN",0
+fn_rom    db "C:\PC110ROM.BIN",0
 fn_cmos   db "C:\PC110CMO.BIN",0
 fn_bsq    db "C:\PC110BSQ.BIN",0
 bs_title  db "Start up - boot sequence  (CMOS 0x1D / 0x1E)",0
@@ -3472,6 +3766,20 @@ msg_rconf  db "Overwrite CMOS from backup?  Y = yes (reboot needed), any other k
 msg_rcancel db "Cancelled.  CMOS not changed.",0
 msg_rdone  db "Restored.  Reboot the PC110 for the settings to take effect.",0
 msg_derr   db "ERROR: could not create the output file.",0
+msg_fltitle db "Flash system BIOS  <-  C:\PC110ROM.BIN",13,10,0
+msg_flwarn db "*** DANGER: REFLASHES THE PC110 SYSTEM BIOS ***",13,10
+           db "Writes the 96 KB main block from C:\PC110ROM.BIN (must be",13,10
+           db "the raw 0x20000-0x37FFF slice of a 256 KB BIOS image).",13,10
+           db "If interrupted the machine may be left UNBOOTABLE.",13,10
+           db "A/C adapter and a charged battery are required.",13,10,13,10
+           db "Press Y to flash.  Any other key aborts...",0
+msg_flnoac db "Aborted: plug in the A/C adapter, then retry.",0
+msg_flnobatt db "Aborted: battery below 20%. Charge, then retry.",0
+msg_flnofile db "Aborted: cannot open C:\PC110ROM.BIN.",0
+msg_flrderr db "Aborted: C:\PC110ROM.BIN is not a full 96 KB image.",0
+msg_flgo   db "Flashing... do NOT power off or touch anything.",0
+msg_fldone db "Done. Flash written. Remove media and reboot.",0
+msg_flabort db "Aborted, no action taken.",0
 msg_tmem   db "Memory information and RAM test",0
 tm_base    db "Conventional memory : ",0
 tm_ext     db "Extended memory     : ",0
