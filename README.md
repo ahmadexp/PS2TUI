@@ -199,7 +199,8 @@ IBM PalmTop PC110 — System Manager
 │   ├─ Dump system BIOS  → C:\PC110BIO.BIN   [native · F000, 64 KB]
 │   ├─ Dump video BIOS   → C:\PC110VID.BIN   [native · C000, 32 KB]
 │   ├─ Dump font ROM     → C:\PC110FNT.BIN   [native · 1 MB, 128 banks]
-│   └─ Dump CMOS/RTC RAM → C:\PC110CMO.BIN   [native · CMOS 0x00-0x7F, 128 B]
+│   ├─ Dump CMOS/RTC RAM → C:\PC110CMO.BIN   [native · CMOS 0x00-0x7F, 128 B]
+│   └─ Flash BIOS   (!)  ← C:\PC110ROM.BIN   [native · reflash 96 KB main block]
 │
 ├─ System Test
 │   ├─ Memory info + RAM test          [native · conv/ext size + pattern]
@@ -245,6 +246,14 @@ Global keys:  B Battery · C Settings · R Revisions · Q Quit · ESC Back/Quit
 - **ROM / memory dumps** — write byte-perfect images to the boot drive: **system BIOS**
   (`PC110BIO.BIN`, 64 KB), **video BIOS** (`PC110VID.BIN`, 32 KB) and the **1 MB banked font ROM**
   (`PC110FNT.BIN`) — done natively (direct memory read + font-ROM bank switching), no external tool.
+- **BIOS flash (`!`)** — reflashes the **96 KB main block** of the BIOS flash (Intel 28F002BXT) from
+  `C:\PC110ROM.BIN` (the raw `0x20000-0x37FFF` slice of a 256 KB image). Reproduces yyzkevin's
+  `vpatch` flash sequence byte-for-byte — chipset unlock, VPP-enable (`port 0x98`), 28F002
+  erase/program/poll — with an **A/C + battery-≥20 % check** and a **DANGER confirm**. It touches only
+  the main block; the boot block (reset vector) is left intact so a bad write stays recoverable. Use
+  it to install e.g. the 28 MB memory-map patch or a TFT video-BIOS. **Reflashing can brick the
+  machine — read [`Discovery/BIOS-Flash`](https://github.com/ahmadexp/Open-Source-PC110/blob/main/Discovery/BIOS-Flash/readme.md)
+  first, and only run it on A/C with a recovery path.**
 - **System test menu** (Easy-Setup style) — RAM pattern test + memory sizes, video/colour test,
   interactive keyboard test, speaker beep test, a **live real-time-clock** test, a **PIT timer**
   test, and a **pointing-device** test (INT 33h, vector-guarded).
