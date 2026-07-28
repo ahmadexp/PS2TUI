@@ -204,7 +204,8 @@ IBM PalmTop PC110 — System Manager
 │   ├─ Display: DSTN → TFT (!)               [native · video-BIOS patch, saves C:\PANEL.SAV]
 │   ├─ Display: TFT → DSTN (restore)         [native · restores C:\PANEL.SAV]
 │   ├─ Memory: enable 32 MB patch (!)        [native · POST count-cap patch, verifies stock first]
-│   └─ Memory: remove 32 MB patch (restore)  [native · restores the stock bytes]
+│   ├─ Memory: remove 32 MB patch (restore)  [native · restores the stock bytes]
+│   └─ Diagnose BIOS patches (read-only)     [native · TFT/DSTN, Win-256, 32 MB status]
 │
 ├─ System Test
 │   ├─ Memory info + RAM test          [native · conv/ext size + pattern]
@@ -271,6 +272,12 @@ Global keys:  B Battery · C Settings · R Revisions · Q Quit · ESC Back/Quit
 > [`Discovery/BIOS-Flash`](https://github.com/ahmadexp/Open-Source-PC110/blob/main/Discovery/BIOS-Flash/readme.md) §7);
 > PS2TUI detects the boot drive and only enables flashing when booted from a floppy.
 
+- **Diagnose BIOS patches** — a **read-only** report of which BIOS patches this machine has: the
+  **display panel** (TFT-patched vs stock DSTN, decided by matching the 18 flat-panel XR bytes against
+  both known tables), the **Windows 256-colour** fix, and the **32 MB memory patch** — each with the raw
+  bytes. It only reads the `C000`/`F000` BIOS shadows (no port I/O, no flash commands), so unlike the
+  flash items it works from **any** boot device and is never grayed out. **Hardware-verified** on a stock
+  DSTN PC110 (reported `DSTN (stock) · 0/18 TFT · 18/18 DSTN`, Win-256 absent, 32 MB absent).
 - **Memory: enable / remove 32 MB patch (`!`)** — two items that reflash a **17-byte POST
   memory-sizing patch** so a PC110 with more than the stock 20 MB (e.g. a 16+16 module) cold-boots
   cleanly, without the RC circuit / `DARK2301` of the classic taka hack (it caps the POST memory
