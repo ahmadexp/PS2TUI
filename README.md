@@ -202,7 +202,9 @@ IBM PalmTop PC110 — System Manager
 │   ├─ Dump CMOS/RTC RAM → C:\PC110CMO.BIN   [native · CMOS 0x00-0x7F, 128 B]
 │   ├─ Flash BIOS   (!)  ← C:\PC110ROM.BIN   [native · reflash 96 KB main block]
 │   ├─ Display: DSTN → TFT (!)               [native · video-BIOS patch, saves C:\PANEL.SAV]
-│   └─ Display: TFT → DSTN (restore)         [native · restores C:\PANEL.SAV]
+│   ├─ Display: TFT → DSTN (restore)         [native · restores C:\PANEL.SAV]
+│   ├─ Memory: enable 32 MB patch (!)        [native · POST count-cap patch, verifies stock first]
+│   └─ Memory: remove 32 MB patch (restore)  [native · restores the stock bytes]
 │
 ├─ System Test
 │   ├─ Memory info + RAM test          [native · conv/ext size + pattern]
@@ -264,6 +266,15 @@ Global keys:  B Battery · C Settings · R Revisions · Q Quit · ESC Back/Quit
   no hard-coded DSTN table. Same A/C + battery gate and brick warning as Flash BIOS; reboot to take
   effect. (TFT → DSTN needs the `C:\PANEL.SAV` a prior DSTN → TFT created on that machine, or a
   known-DSTN BIOS restored via Flash BIOS.) **Untested on hardware.**
+- **Memory: enable / remove 32 MB patch (`!`)** — two items that reflash a **17-byte POST
+  memory-sizing patch** so a PC110 with more than the stock 20 MB (e.g. a 16+16 module) cold-boots
+  cleanly, without the RC circuit / `DARK2301` of the classic taka hack (it caps the POST memory
+  count at 28 MB; see [`Mods/32MB-Memory-BIOS-Patch`](https://github.com/ahmadexp/Open-Source-PC110/tree/main/Mods/32MB-Memory-BIOS-Patch)
+  and [`Discovery/RAM-Module`](https://github.com/ahmadexp/Open-Source-PC110/blob/main/Discovery/RAM-Module/readme.md) §7).
+  Both the patched and original bytes are known exactly, so **enable** and **remove** each first
+  **verify** the current BIOS is in the expected state and refuse to touch an unexpected or
+  already-in-that-state image — no backup file needed. Same A/C + battery gate and brick warning;
+  only the 96 KB main block is touched; reboot to take effect. **Untested on hardware.**
 - **System test menu** (Easy-Setup style) — RAM pattern test + memory sizes, video/colour test,
   interactive keyboard test, speaker beep test, a **live real-time-clock** test, a **PIT timer**
   test, and a **pointing-device** test (INT 33h, vector-guarded).

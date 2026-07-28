@@ -1384,6 +1384,151 @@ panel_load:
 .err:   stc
         ret
 
+; ----------------------------------------------------------------------------
+;  32 MB memory support: apply / remove the POST count-cap patch.
+;  17 bytes in the F-lower half (system BIOS, = FL_FSEG): a hook over the
+;  extended-memory count loop + an out-of-line stub that caps the count at
+;  28 MB total so a >20 MB machine (e.g. 16+16 module) cold-boots cleanly with
+;  no RC circuit / DARK2301.  See Mods/32MB-Memory-BIOS-Patch and RAM-Module 7.
+;  Unlike DSTN<->TFT, both the patched and original bytes are known exactly
+;  (stock BIOS: hook = 83 C3 40, stub slot = zeros), so no backup file is
+;  needed -- but each direction first VERIFIES the current F000 bytes so it
+;  refuses to touch an unexpected / already-in-that-state BIOS.
+; ----------------------------------------------------------------------------
+MEM_HOOK    equ 0x6095                      ; F-lower offset of the count-loop hook
+MEM_STUB    equ 0x25CE                      ; F-lower offset of the stub slot
+MEM_STUBLEN equ 15
+
+mem32_on:                                   ; apply the 32 MB (28 MB-cap) patch
+        mov     si, msg_m32ont
+        call    dump_header
+        mov     si, msg_mwarn
+        call    puts_tty
+        call    getkey
+        cmp     al, 'Y'
+        je      .go
+        cmp     al, 'y'
+        je      .go
+        mov     si, msg_flabort
+        jmp     panel_finish
+.go:    mov     ax, 0xF000                  ; verify current BIOS is STOCK at the hook
+        mov     es, ax
+        mov     si, mem_hook_orig
+        call    mem_ck
+        jc      .bad
+        call    panel_power
+        jc      panel_finish
+        mov     dh, 3
+        mov     dl, 0
+        call    gotoxy
+        mov     si, msg_pgo
+        call    puts_tty
+        pusha
+        push    ds
+        push    es
+        call    flash_enable
+        call    flash_copy_current
+        mov     si, mem_hook_patch
+        mov     di, MEM_HOOK
+        mov     cx, 3
+        call    mem_blk
+        mov     si, mem_stub_patch
+        mov     di, MEM_STUB
+        mov     cx, MEM_STUBLEN
+        call    mem_blk
+        call    flash_program
+        pop     es
+        pop     ds
+        popa
+        mov     si, msg_m32ondone
+        jmp     panel_finish
+.bad:   mov     si, msg_m32onbad
+        jmp     panel_finish
+
+mem32_off:                                  ; remove the patch (restore stock)
+        mov     si, msg_m32offt
+        call    dump_header
+        mov     si, msg_mwarn
+        call    puts_tty
+        call    getkey
+        cmp     al, 'Y'
+        je      .go
+        cmp     al, 'y'
+        je      .go
+        mov     si, msg_flabort
+        jmp     panel_finish
+.go:    mov     ax, 0xF000                  ; verify current BIOS IS patched at the hook
+        mov     es, ax
+        mov     si, mem_hook_patch
+        call    mem_ck
+        jc      .bad
+        call    panel_power
+        jc      panel_finish
+        mov     dh, 3
+        mov     dl, 0
+        call    gotoxy
+        mov     si, msg_pgo
+        call    puts_tty
+        pusha
+        push    ds
+        push    es
+        call    flash_enable
+        call    flash_copy_current
+        mov     si, mem_hook_orig
+        mov     di, MEM_HOOK
+        mov     cx, 3
+        call    mem_blk
+        mov     si, mem_stub_orig
+        mov     di, MEM_STUB
+        mov     cx, MEM_STUBLEN
+        call    mem_blk
+        call    flash_program
+        pop     es
+        pop     ds
+        popa
+        mov     si, msg_m32offdone
+        jmp     panel_finish
+.bad:   mov     si, msg_m32offbad
+        jmp     panel_finish
+
+; mem_blk: copy CX bytes [cs:si] -> FL_FSEG:di
+mem_blk:
+        push    ax
+        push    es
+        mov     ax, FL_FSEG
+        mov     es, ax
+.l:     mov     al, [cs:si]
+        mov     [es:di], al
+        inc     si
+        inc     di
+        loop    .l
+        pop     es
+        pop     ax
+        ret
+
+; mem_ck: compare 3 bytes ES:[MEM_HOOK] vs [cs:si] ; CF=1 on mismatch (ES set by caller)
+mem_ck:
+        push    ax
+        push    si
+        push    di
+        push    cx
+        mov     di, MEM_HOOK
+        mov     cx, 3
+.c:     mov     al, [cs:si]
+        cmp     al, [es:di]
+        jne     .bad
+        inc     si
+        inc     di
+        loop    .c
+        clc
+        jmp     .out
+.bad:   stc
+.out:   pop     cx
+        pop     di
+        pop     si
+        pop     ax
+        ret
+
 ; flash_apply: BX = value-table offset (CS-relative, NPANEL bytes);
 ;   BP != 0  => capture the current byte at each offset into panel_sav first.
 ;   ES is set here; offsets come from tft_off[]; runs inside the CLI window.
@@ -3769,6 +3914,8 @@ rows:                     ; pure items, grouped by category (no header rows)
   ROW l_flash,  flash_bios, 0, R_CALL
   ROW l_ptft,   panel_tft,  0, R_CALL
   ROW l_pdstn,  panel_dstn, 0, R_CALL
+  ROW l_m32on,  mem32_on,   0, R_CALL
+  ROW l_m32off, mem32_off,  0, R_CALL
   ; -- System Test (38..44) --
   ROW l_tmem,   test_mem,   0, R_CALL
   ROW l_tvid,   test_vid,   0, R_CALL
@@ -3802,11 +3949,11 @@ cats:                     ; top-level categories (label, desc, start, count)
   CAT c_dev,    d_dev,    10, 9
   CAT c_kbd,    d_kbd,    19, 5
   CAT c_adv,    d_adv,    24, 11
-  CAT c_dump,   d_dump,   35, 7
-  CAT c_test,   d_test,   42, 7
-  CAT c_diag,   d_diag,   49, 5
-  CAT c_backup, d_backup, 54, 2
-  CAT c_info,   d_info,   56, 6
+  CAT c_dump,   d_dump,   35, 9
+  CAT c_test,   d_test,   44, 7
+  CAT c_diag,   d_diag,   51, 5
+  CAT c_backup, d_backup, 56, 2
+  CAT c_info,   d_info,   58, 6
 cats_end:
 NCATS equ (cats_end-cats)/6
 
@@ -3876,6 +4023,8 @@ l_dcmos  db "Dump CMOS/RTC RAM -> PC110CMO.BIN",0
 l_flash  db "Flash BIOS  <- PC110ROM.BIN  (!)",0
 l_ptft   db "Display: DSTN -> TFT  (!)",0
 l_pdstn  db "Display: TFT -> DSTN  (restore)",0
+l_m32on  db "Memory: enable 32 MB patch  (!)",0
+l_m32off db "Memory: remove 32 MB patch  (restore)",0
 l_tmem   db "Memory info + RAM test",0
 l_tvid   db "Video / colour test",0
 l_tkbd   db "Keyboard test",0
@@ -3968,6 +4117,11 @@ tft_off   dw 0x01CB,0x0A9A,0x0A9C,0x0AA0,0x0AA4,0x0AA6,0x0AB4,0x0AB8,0x0AE6
 tft_val   db 0x1F,0x42,0xC0,0xC5,0xC4,0xC0,0x1C,0x00,0x56
           db 0x13,0x5F,0x00,0x0C,0x01,0x26,0xDF,0x05,0x00
 panel_sav db 18 dup(0)                     ; captured pre-patch (DSTN) originals
+; 32 MB memory count-cap patch (F-lower half); both directions known exactly
+mem_hook_patch db 0xE9,0x36,0xC5           ; jmp 0x25CE (over the count loop)
+mem_hook_orig  db 0x83,0xC3,0x40           ; add bx,0x40 (stock)
+mem_stub_patch db 0x83,0xC3,0x40,0x81,0xFB,0x00,0x6C,0x73,0x03,0xE9,0xBE,0x3A,0xE9,0xCC,0x3A
+mem_stub_orig  db 15 dup(0)                ; the stub slot is zeros in the stock BIOS
 fn_cmos   db "C:\PC110CMO.BIN",0
 fn_bsq    db "C:\PC110BSQ.BIN",0
 bs_title  db "Start up - boot sequence  (CMOS 0x1D / 0x1E)",0
@@ -4019,6 +4173,17 @@ msg_pgo    db "Reflashing video BIOS... do NOT power off.",0
 msg_ptftdone db "Done: TFT panel config written (DSTN saved). Reboot.",0
 msg_pdstndone db "Done: DSTN panel config restored. Reboot.",0
 msg_pnosave db "No C:\PANEL.SAV backup found -- run DSTN->TFT first,",13,10,"or restore a known-DSTN BIOS with Flash BIOS.",0
+msg_m32ont db "Memory: enable 32 MB support (28 MB cap)",13,10,0
+msg_m32offt db "Memory: remove 32 MB patch (restore stock)",13,10,0
+msg_mwarn  db "*** REFLASHES THE SYSTEM BIOS (96 KB main block) ***",13,10
+           db "Patches POST memory sizing so a >20 MB machine boots.",13,10
+           db "Only for the stock BIOS; verifies before writing.",13,10
+           db "A/C + charged battery required. Interrupt = UNBOOTABLE.",13,10,13,10
+           db "Press Y to proceed.  Any other key aborts...",0
+msg_m32ondone db "Done: 32 MB patch applied. Reboot to take effect.",0
+msg_m32offdone db "Done: 32 MB patch removed (stock). Reboot.",0
+msg_m32onbad db "Aborted: BIOS not stock at the patch site (already",13,10,"patched, or unexpected revision). Nothing written.",0
+msg_m32offbad db "Aborted: BIOS not patched (or unexpected revision).",13,10,"Nothing written.",0
 msg_tmem   db "Memory information and RAM test",0
 tm_base    db "Conventional memory : ",0
 tm_ext     db "Extended memory     : ",0
