@@ -266,6 +266,11 @@ Global keys:  B Battery · C Settings · R Revisions · Q Quit · ESC Back/Quit
   no hard-coded DSTN table. Same A/C + battery gate and brick warning as Flash BIOS; reboot to take
   effect. (TFT → DSTN needs the `C:\PANEL.SAV` a prior DSTN → TFT created on that machine, or a
   known-DSTN BIOS restored via Flash BIOS.) **Untested on hardware.**
+> **All four flash items above are disabled (grayed out) unless you booted the PC110 from a floppy.**
+> The BIOS-flash 12 V (VPP) is only powered under a floppy boot in an IBM-marked drive (see
+> [`Discovery/BIOS-Flash`](https://github.com/ahmadexp/Open-Source-PC110/blob/main/Discovery/BIOS-Flash/readme.md) §7);
+> PS2TUI detects the boot drive and only enables flashing when booted from a floppy.
+
 - **Memory: enable / remove 32 MB patch (`!`)** — two items that reflash a **17-byte POST
   memory-sizing patch** so a PC110 with more than the stock 20 MB (e.g. a 16+16 module) cold-boots
   cleanly, without the RC circuit / `DARK2301` of the classic taka hack (it caps the POST memory

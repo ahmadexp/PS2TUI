@@ -33,6 +33,7 @@ R_ACT     equ 2           ; action (no options, just run "PS2 <cmd>")
 R_INFO    equ 3           ; runs "PS2 _@REVision"
 R_CALL    equ 4           ; calls the internal routine at the record's "cmd" field
 R_UITEM   equ 5           ; like R_ITEM but runs C:\ULTRACHG.COM <option> (no cmd word)
+R_FCALL   equ 6           ; flash-gated R_CALL: enabled only when booted from a floppy (VPP present)
 
 ; ---- layout : a framed window floating on a grey desktop, with a drop shadow -
 UI_L      equ 2           ; window left column  (border)
@@ -46,6 +47,7 @@ FOOT_ROW  equ 16          ; footer key-hints row (inside window, above bottom bo
 ITEM_COL  equ 7           ; item label column
 DESC_COL  equ 31          ; description column (main menu)
 A_SHADOW  equ 0x08        ; drop-shadow cells: dark on black
+A_DIM     equ 0x38        ; grayed-out item: dark-grey on cyan (flash items, no floppy boot)
 A_DESKTOP equ 0x70        ; desktop backdrop: black on light-grey (space = grey)
 ; CP437 double-line box glyphs
 BX_TL     equ 0xC9
@@ -65,6 +67,18 @@ start:
         mov     bx, 0x1000        ; keep 64 KB
         mov     ah, 0x4A
         int     0x21
+
+        ; ---- detect boot drive: flash items are enabled only from a floppy
+        ; boot (the 12V VPP rail is only up then -- see Discovery/BIOS-Flash 7)
+        mov     ax, 0x3305         ; DOS 4+ : get boot drive -> DL (1=A: 2=B: ...)
+        int     0x21
+        mov     byte [floppy_boot], 0
+        cmp     dl, 1
+        je      .fdok
+        cmp     dl, 2
+        jne     .fdno
+.fdok:  mov     byte [floppy_boot], 1
+.fdno:
 
         mov     byte [level], 0    ; start at the main (category) menu
         mov     word [cat_sel], 0
@@ -177,10 +191,18 @@ activate_sel:
         je      .action
         cmp     al, R_CALL
         je      .call
+        cmp     al, R_FCALL
+        je      .fcall
         cmp     al, R_UITEM
         je      .uitem
         ; R_ITEM : open the option picker
         jmp     pick_option
+.fcall:
+        ; flash-gated: only run when booted from a floppy (VPP present)
+        cmp     byte [floppy_boot], 0
+        jne     .call
+        call    need_floppy
+        ret
 .uitem:
         ; charging item: exec C:\ULTRACHG.COM <option> instead of PS2.EXE
         mov     word [exec_prog], ultra_prog
@@ -3454,6 +3476,16 @@ draw_sub:
         call    row_ptr
         mov     ax, [si]
         mov     [lbl_tmp], ax
+        ; gray out flash-gated (R_FCALL) items when not booted from a floppy
+        mov     al, [si+6]
+        cmp     al, R_FCALL
+        jne     .adok
+        cmp     byte [floppy_boot], 0
+        jne     .adok
+        cmp     byte [sel_attr], A_SEL
+        je      .adok              ; keep the selection bar readable
+        mov     byte [sel_attr], A_DIM
+.adok:
         mov     dh, [row_tmp]
         mov     dl, ITEM_COL
         call    scr_off
@@ -3463,6 +3495,23 @@ draw_sub:
         inc     word [ri]
         jmp     .n
 .done:  ret
+
+; need_floppy : shown when a flash item is picked without a floppy boot
+need_floppy:
+        mov     si, msg_needfd1
+        call    dump_header
+        mov     dh, 3
+        mov     dl, 0
+        call    gotoxy
+        mov     si, msg_needfd2
+        call    puts_tty
+        mov     dh, 6
+        mov     dl, 0
+        call    gotoxy
+        mov     si, msg_donekey
+        call    puts_hint
+        call    getkey
+        ret
 
 ; draw_picker: popup box listing options of the current item
 draw_picker:
@@ -3773,6 +3822,7 @@ pk_i       dw 0
 tmp_base   dw 0
 fhandle    dw 0
 dseg       dw 0
+floppy_boot db 0          ; 1 if booted from a floppy (flash items enabled)
 dchunks    dw 0
 exec_prog  dw progname            ; program EXEC'd by do_exec (default PS2.EXE)
 show_pfx   dw pfx_ps2             ; confirm-dialog display prefix (default "PS2 ")
@@ -3847,6 +3897,12 @@ cf_title   db "Run this command?",0
 cf_prompt  db "Press Y to run, N to cancel",0
 msg_running db "Running: ",0
 msg_donekey db "--- done.  Press any key to return to PS2TUI ---",0
+msg_needfd1 db "Flashing is disabled",0
+msg_needfd2 db "The BIOS flash 12V (VPP) is only powered when you boot from a",13,10
+            db "floppy in an IBM-marked floppy drive. These items are grayed",13,10
+            db "out and disabled because this machine was not booted from a",13,10
+            db "floppy. Boot from an IBM DOS floppy, then run this again.",13,10,13,10
+            db "(See Discovery/BIOS-Flash for the hardware VPP interlock.)",0
 crlf       db 13,10,0
 
 ; ---- buffers ----
@@ -3911,11 +3967,11 @@ rows:                     ; pure items, grouped by category (no header rows)
   ROW l_dvbios, dump_vbios, 0, R_CALL
   ROW l_dfont,  dump_font,  0, R_CALL
   ROW l_dcmos,  dump_cmos,  0, R_CALL
-  ROW l_flash,  flash_bios, 0, R_CALL
-  ROW l_ptft,   panel_tft,  0, R_CALL
-  ROW l_pdstn,  panel_dstn, 0, R_CALL
-  ROW l_m32on,  mem32_on,   0, R_CALL
-  ROW l_m32off, mem32_off,  0, R_CALL
+  ROW l_flash,  flash_bios, 0, R_FCALL
+  ROW l_ptft,   panel_tft,  0, R_FCALL
+  ROW l_pdstn,  panel_dstn, 0, R_FCALL
+  ROW l_m32on,  mem32_on,   0, R_FCALL
+  ROW l_m32off, mem32_off,  0, R_FCALL
   ; -- System Test (38..44) --
   ROW l_tmem,   test_mem,   0, R_CALL
   ROW l_tvid,   test_vid,   0, R_CALL
